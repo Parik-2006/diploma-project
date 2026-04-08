@@ -55,7 +55,7 @@ def adminlogin(request):
         un=request.POST['uname']
         ps=request.POST['psw']
         user=auth.authenticate(username=un,password=ps)
-        if user.is_superuser is not None:
+        if user is not None and user.is_superuser:
             auth.login(request,user)
             return HttpResponseRedirect('adminhome')
         else:
