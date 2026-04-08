@@ -1,0 +1,48 @@
+{% extends "nav.html" %}
+{% block content %}
+{% load static %}
+
+
+<div class="body_bg layout_padding">
+ <!-- contact section -->
+
+ <section class="contact_section">
+    <div class="container">
+      <div class="heading_container">
+        <h2>
+          Predict Malicious Bot
+        </h2>
+      </div>
+    </div>
+    <div class="container contact_bg layout_padding2-top">
+      <div class="row">
+        <div class="col-md-6">
+          <div class="contact_form ">
+            <form method="post">
+                {% csrf_token %}
+              <textarea name="bot" rows="5" cols="80"
+              placeholder="Malicious Bot
+              Prediction:{{pred}}-{{prediction}}"></textarea>
+              
+               <button type="submit">
+                Predict
+              </button>
+            </form>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="img-box">
+            <img src="images/contact-img.jpg" alt="">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- end contact section -->
+
+</div>
+
+
+
+{% endblock %}
