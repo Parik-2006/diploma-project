@@ -55,12 +55,13 @@ def adminlogin(request):
         un=request.POST['uname']
         ps=request.POST['psw']
         user=auth.authenticate(username=un,password=ps)
-        if user is not None and user.is_superuser:
+        if user is not None:
             auth.login(request,user)
-            return HttpResponseRedirect('adminhome')
-        else:
-            messages.info(request,"Invalid Credentials")
-            return render(request,"adminlogin.html")
+            if user.is_superuser:
+                return HttpResponseRedirect('adminhome')
+            return HttpResponseRedirect('data')
+        messages.info(request,"Invalid Credentials")
+        return render(request,"adminlogin.html")
     return render(request,"adminlogin.html")
 
 
