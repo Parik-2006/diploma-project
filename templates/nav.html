@@ -92,6 +92,13 @@
 
   <script type="text/javascript" src="{% static 'js/jquery-3.4.1.min.js' %}"></script>
   <script type="text/javascript" src="{% static 'js/bootstrap.js' %}"></script>
+  {% if messages %}
+  <div class="container mt-3">
+    {% for message in messages %}
+    <div class="alert alert-warning" role="alert">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
 {% block content %}
 {% endblock %}
 </body>
