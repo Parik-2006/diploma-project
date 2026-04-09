@@ -88,16 +88,6 @@
     </header>
     <!-- end header section -->
 
-    {% if messages %}
-    <div class="container mt-3">
-      {% for message in messages %}
-      <div class="alert alert-danger" role="alert">
-        {{ message }}
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-
   <script type="text/javascript" src="{% static 'js/jquery-3.4.1.min.js' %}"></script>
   <script type="text/javascript" src="{% static 'js/bootstrap.js' %}"></script>
 {% block content %}
