@@ -508,6 +508,14 @@ def data(request):
         valid_mask = y.notna()
         x = x.loc[valid_mask]
         y = y.loc[valid_mask].astype(int)
+
+        # Additional data cleaning
+        x = x.fillna(0)  # Fill any remaining NaN values
+        x = x.replace([np.inf, -np.inf], 0)  # Replace infinity values
+
+        print(f"Training data shape: {x.shape}")
+        print(f"Target distribution: {y.value_counts()}")
+
         x_train,x_test,y_train,y_test = train_test_split(x,y,test_size=0.3, random_state=42)
         classifiers = [
     DecisionTreeClassifier(),
@@ -533,9 +541,18 @@ def data(request):
         results = results.sort_values(by='Accuracy', ascending=False)
         print(results.head())
         pipeline = Pipeline([
-        ('classifier', ExtraTreesClassifier())
+        ('classifier', RandomForestClassifier(random_state=42))
     ])
-        pipeline.fit(x_train,y_train)
+        try:
+            pipeline.fit(x_train,y_train)
+        except Exception as e:
+            print(f"Training failed: {e}")
+            # Fallback to a simpler model
+            from sklearn.linear_model import LogisticRegression
+            pipeline = Pipeline([
+                ('classifier', LogisticRegression(random_state=42, max_iter=1000))
+            ])
+            pipeline.fit(x_train,y_train)
         y_pred = pipeline.predict(x_test)
         print(classification_report(y_test,y_pred))
         def get_numerical_values(url):
@@ -899,10 +916,14 @@ def data(request):
                 2: 'phishing',
                 3: 'malware'
             }
-            numerical_values = get_numerical_values(url)
-            prediction_int = pipeline.predict(np.array(list(numerical_values.values())).reshape(1, -1))[0]
-            prediction_label = class_mapping.get(prediction_int, 'Unknown')
-            return prediction_int, prediction_label
+            try:
+                numerical_values = get_numerical_values(url)
+                prediction_int = pipeline.predict(np.array(list(numerical_values.values())).reshape(1, -1))[0]
+                prediction_label = class_mapping.get(prediction_int, 'Unknown')
+                return prediction_int, prediction_label
+            except Exception as e:
+                print(f"Prediction failed for {url}: {e}")
+                return -1, 'Error'
         url = "https://www.example.com"
         numerical_values = get_numerical_values(url)
         print(numerical_values)
