@@ -20,8 +20,8 @@
           <div class="contact_form ">
             <form method="post">
               {% csrf_token %}
-              <input type="text" placeholder="User Name" name="uname">
-              <input type="password" placeholder="Password" name="psw">
+              <input type="text" placeholder="User Name" name="username" required>
+              <input type="password" placeholder="Password" name="password" required>
                <button type="submit">
                 Login
               </button>
