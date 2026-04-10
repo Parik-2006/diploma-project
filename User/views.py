@@ -12,6 +12,7 @@ import string
 import hashlib
 from urllib.parse import urlparse
 import os
+import traceback
 
 # ML imports - made optional for local development
 try:
@@ -321,38 +322,73 @@ def index(request):
 def register(request):
     if request.method == 'POST':
         try:
-            username = request.POST.get('username', '').strip()
-            email = request.POST.get('email', '').strip()
-            password = request.POST.get('password', '')
-            password2 = request.POST.get('password2', '')
+            print(f"[REGISTER] Starting POST request")
+            
+            # Get form data
+            try:
+                username = request.POST.get('username', '').strip()
+                email = request.POST.get('email', '').strip()
+                password = request.POST.get('password', '')
+                password2 = request.POST.get('password2', '')
+                print(f"[REGISTER] Form data received: username={username}, email={email}")
+            except Exception as e:
+                print(f"[REGISTER] Error getting form data: {str(e)}")
+                print(traceback.format_exc())
+                return render(request, 'register.html')
 
             # Validate inputs
             if not username or not email or not password:
+                print(f"[REGISTER] Validation failed: missing fields")
                 messages.error(request, 'All fields are required')
                 return render(request, 'register.html')
 
-            if password == password2:
-                if User.objects.filter(email=email).exists():
-                    messages.info(request, 'Email already exists')
-                    return render(request, 'register.html')
-                elif User.objects.filter(username=username).exists():
-                    messages.info(request, 'Username already exists')
-                    return render(request, 'register.html')
-                else:
-                    try:
-                        user = User.objects.create_user(username=username, email=email, password=password)
-                        user.save()
-                        messages.success(request, 'Registration successful! Please login.')
-                        return HttpResponseRedirect('/login')
-                    except Exception as e:
-                        print(f"Error creating user: {str(e)}")
-                        messages.error(request, f'Error creating user: {str(e)}')
-                        return render(request, 'register.html')
-            else:
+            # Check password match
+            if password != password2:
+                print(f"[REGISTER] Passwords do not match")
                 messages.info(request, 'Password not matching')
                 return render(request, 'register.html')
+
+            # Check email exists
+            try:
+                if User.objects.filter(email=email).exists():
+                    print(f"[REGISTER] Email already exists: {email}")
+                    messages.info(request, 'Email already exists')
+                    return render(request, 'register.html')
+            except Exception as e:
+                print(f"[REGISTER] Error checking email: {str(e)}")
+                print(traceback.format_exc())
+                messages.error(request, f'Database error while checking email: {str(e)}')
+                return render(request, 'register.html')
+
+            # Check username exists
+            try:
+                if User.objects.filter(username=username).exists():
+                    print(f"[REGISTER] Username already exists: {username}")
+                    messages.info(request, 'Username already exists')
+                    return render(request, 'register.html')
+            except Exception as e:
+                print(f"[REGISTER] Error checking username: {str(e)}")
+                print(traceback.format_exc())
+                messages.error(request, f'Database error while checking username: {str(e)}')
+                return render(request, 'register.html')
+
+            # Create user
+            try:
+                print(f"[REGISTER] Creating user: {username}")
+                user = User.objects.create_user(username=username, email=email, password=password)
+                user.save()
+                print(f"[REGISTER] User created successfully: {username}")
+                messages.success(request, 'Registration successful! Please login.')
+                return HttpResponseRedirect('/login')
+            except Exception as e:
+                print(f"[REGISTER] Error creating user: {str(e)}")
+                print(traceback.format_exc())
+                messages.error(request, f'Error creating user: {str(e)}')
+                return render(request, 'register.html')
+
         except Exception as e:
-            print(f"Register error: {str(e)}")
+            print(f"[REGISTER] CRITICAL ERROR: {str(e)}")
+            print(traceback.format_exc())
             messages.error(request, 'An error occurred during registration')
             return render(request, 'register.html')
     else:
@@ -361,23 +397,43 @@ def register(request):
 def login(request):
     if request.method == 'POST':
         try:
-            username = request.POST.get('username', '').strip()
-            password = request.POST.get('password', '')
+            print(f"[LOGIN] Starting POST request")
+            
+            try:
+                username = request.POST.get('username', '').strip()
+                password = request.POST.get('password', '')
+                print(f"[LOGIN] Form data received: username={username}")
+            except Exception as e:
+                print(f"[LOGIN] Error getting form data: {str(e)}")
+                print(traceback.format_exc())
+                return render(request, 'login.html')
 
             if not username or not password:
+                print(f"[LOGIN] Validation failed: missing fields")
                 messages.error(request, 'Username and password are required')
                 return render(request, 'login.html')
 
-            user = auth.authenticate(username=username, password=password)
-
-            if user is not None:
-                auth.login(request, user)
-                return HttpResponseRedirect('/predict')
-            else:
-                messages.info(request, 'Invalid credentials')
+            try:
+                print(f"[LOGIN] Authenticating user: {username}")
+                user = auth.authenticate(username=username, password=password)
+                
+                if user is not None:
+                    print(f"[LOGIN] Authentication successful for: {username}")
+                    auth.login(request, user)
+                    messages.success(request, f'Welcome back, {username}!')
+                    return HttpResponseRedirect('/predict')
+                else:
+                    print(f"[LOGIN] Authentication failed for: {username}")
+                    messages.info(request, 'Invalid credentials')
+                    return render(request, 'login.html')
+            except Exception as e:
+                print(f"[LOGIN] Error during authentication: {str(e)}")
+                print(traceback.format_exc())
+                messages.error(request, f'Authentication error: {str(e)}')
                 return render(request, 'login.html')
         except Exception as e:
-            print(f"Login error: {str(e)}")
+            print(f"[LOGIN] CRITICAL ERROR: {str(e)}")
+            print(traceback.format_exc())
             messages.error(request, 'An error occurred during login')
             return render(request, 'login.html')
     else:
@@ -386,23 +442,47 @@ def login(request):
 def adminlogin(request):
     if request.method == 'POST':
         try:
-            username = request.POST.get('username', '').strip()
-            password = request.POST.get('password', '')
+            print(f"[ADMINLOGIN] Starting POST request")
+            
+            try:
+                username = request.POST.get('username', '').strip()
+                password = request.POST.get('password', '')
+                print(f"[ADMINLOGIN] Form data received: username={username}")
+            except Exception as e:
+                print(f"[ADMINLOGIN] Error getting form data: {str(e)}")
+                print(traceback.format_exc())
+                return render(request, 'adminlogin.html')
 
             if not username or not password:
+                print(f"[ADMINLOGIN] Validation failed: missing fields")
                 messages.error(request, 'Username and password are required')
                 return render(request, 'adminlogin.html')
 
-            user = auth.authenticate(username=username, password=password)
+            try:
+                print(f"[ADMINLOGIN] Authenticating admin user: {username}")
+                user = auth.authenticate(username=username, password=password)
 
-            if user is not None and user.is_superuser:
-                auth.login(request, user)
-                return HttpResponseRedirect('/adminhome')
-            else:
-                messages.info(request, 'Invalid credentials or not an admin')
+                if user is not None and user.is_superuser:
+                    print(f"[ADMINLOGIN] Admin authentication successful for: {username}")
+                    auth.login(request, user)
+                    messages.success(request, f'Welcome Admin, {username}!')
+                    return HttpResponseRedirect('/adminhome')
+                elif user is not None:
+                    print(f"[ADMINLOGIN] User authenticated but not admin: {username}")
+                    messages.info(request, 'User authenticated but not an admin')
+                    return render(request, 'adminlogin.html')
+                else:
+                    print(f"[ADMINLOGIN] Authentication failed for: {username}")
+                    messages.info(request, 'Invalid credentials')
+                    return render(request, 'adminlogin.html')
+            except Exception as e:
+                print(f"[ADMINLOGIN] Error during authentication: {str(e)}")
+                print(traceback.format_exc())
+                messages.error(request, f'Authentication error: {str(e)}')
                 return render(request, 'adminlogin.html')
         except Exception as e:
-            print(f"Admin login error: {str(e)}")
+            print(f"[ADMINLOGIN] CRITICAL ERROR: {str(e)}")
+            print(traceback.format_exc())
             messages.error(request, 'An error occurred during admin login')
             return render(request, 'adminlogin.html')
     else:
@@ -423,15 +503,26 @@ def adminhome(request):
 def predict(request):
     if request.method == 'POST':
         try:
-            url = request.POST.get('url', '').strip()
-            user = request.user
+            print(f"[PREDICT] Starting POST request")
+            
+            # Get and validate URL
+            try:
+                url = request.POST.get('url', '').strip()
+                user = request.user
+                print(f"[PREDICT] URL received: {url}, User: {user}")
+            except Exception as e:
+                print(f"[PREDICT] Error getting form data: {str(e)}")
+                print(traceback.format_exc())
+                return render(request, 'predict.html')
 
             # Validate URL input
             if not url:
+                print(f"[PREDICT] URL is empty")
                 messages.error(request, 'URL cannot be empty')
                 return render(request, 'predict.html')
 
             if not user.is_authenticated:
+                print(f"[PREDICT] User not authenticated")
                 messages.error(request, 'You must be logged in to make predictions')
                 return HttpResponseRedirect('/login')
 
@@ -441,6 +532,7 @@ def predict(request):
 
             if not ML_AVAILABLE:
                 # Mock response for local development
+                print(f"[PREDICT] ML not available - using mock response")
                 messages.warning(request, 'Running in mock mode - ML dependencies not available')
                 prediction_result = "Mock prediction: URL appears safe (ML not available)"
                 prediction_type = "Safe"
@@ -449,14 +541,17 @@ def predict(request):
                 try:
                     # Lazy train model on first prediction if not already trained
                     if not model_trained:
-                        print("Training model on first prediction request...")
+                        print(f"[PREDICT] Training model on first prediction request...")
                         messages.info(request, 'Training model on first request... Please wait.')
                         if not train_model():
+                            print(f"[PREDICT] Model training failed")
                             messages.error(request, 'Failed to train prediction model')
                             return render(request, 'predict.html')
+                        print(f"[PREDICT] Model trained successfully")
 
                     # Extract features from the URL
                     try:
+                        print(f"[PREDICT] Extracting features from URL")
                         url_len = get_url_length(str(url))
                         letters_count = count_letters(url)
                         digits_count = count_digits(url)
@@ -468,9 +563,11 @@ def predict(request):
                         pri_domain = extract_root_domain(url)
                         url_region = hash_encode(get_url_region(str(pri_domain)))
                         root_domain = hash_encode(str(pri_domain))
+                        print(f"[PREDICT] Features extracted successfully")
                     except Exception as e:
                         error_msg = f'Error extracting URL features: {str(e)}'
-                        print(f"Feature extraction error: {error_msg}")
+                        print(f"[PREDICT] Feature extraction error: {error_msg}")
+                        print(traceback.format_exc())
                         messages.error(request, error_msg)
                         prediction_result = error_msg
                         prediction_type = "Error"
@@ -479,11 +576,14 @@ def predict(request):
 
                     # Create feature array
                     try:
+                        print(f"[PREDICT] Creating feature array")
                         features = np.array([[url_len, letters_count, digits_count, special_chars_count,
                                             shortened, abnormal, secure, have_ip, url_region, root_domain]])
+                        print(f"[PREDICT] Feature array created: shape={features.shape}")
                     except Exception as e:
                         error_msg = f'Error creating feature array: {str(e)}'
-                        print(f"Feature array error: {error_msg}")
+                        print(f"[PREDICT] Feature array error: {error_msg}")
+                        print(traceback.format_exc())
                         messages.error(request, error_msg)
                         prediction_result = error_msg
                         prediction_type = "Error"
@@ -493,8 +593,10 @@ def predict(request):
                     # Make prediction
                     if pipeline is not None and model_trained:
                         try:
+                            print(f"[PREDICT] Making prediction with model")
                             prediction = pipeline.predict(features)[0]
                             prediction_proba = pipeline.predict_proba(features)[0]
+                            print(f"[PREDICT] Prediction made: {prediction}, Probabilities: {prediction_proba}")
 
                             # Map prediction to type
                             type_mapping = {0: 'Benign', 1: 'Defacement', 2: 'Phishing', 3: 'Malware'}
@@ -504,16 +606,19 @@ def predict(request):
                             confidence = f"{max(prediction_proba) * 100:.2f}%"
 
                             prediction_result = f"URL classified as: {prediction_type} (Confidence: {confidence})"
+                            print(f"[PREDICT] Result: {prediction_result}")
                             messages.success(request, f'Prediction completed: {prediction_type}')
                         except Exception as e:
                             error_msg = f'Error making prediction: {str(e)}'
-                            print(f"Prediction error: {error_msg}")
+                            print(f"[PREDICT] Prediction error: {error_msg}")
+                            print(traceback.format_exc())
                             messages.error(request, error_msg)
                             prediction_result = error_msg
                             prediction_type = "Error"
                             confidence = "N/A"
                     else:
                         error_msg = "Model not trained yet. Please try again later."
+                        print(f"[PREDICT] {error_msg}")
                         messages.warning(request, error_msg)
                         prediction_result = error_msg
                         prediction_type = "Unknown"
@@ -522,7 +627,8 @@ def predict(request):
                 except Exception as e:
                     if prediction_result is None:
                         error_msg = f"Unexpected error during prediction: {str(e)}"
-                        print(f"Prediction exception: {error_msg}")
+                        print(f"[PREDICT] Prediction exception: {error_msg}")
+                        print(traceback.format_exc())
                         messages.error(request, error_msg)
                         prediction_result = error_msg
                         prediction_type = "Error"
@@ -530,6 +636,7 @@ def predict(request):
 
             # Save to database
             try:
+                print(f"[PREDICT] Saving to database for user: {user}")
                 MaliciousBot.objects.create(
                     user=user if user.is_authenticated else None,
                     url=url,
@@ -537,10 +644,11 @@ def predict(request):
                     prediction_type=prediction_type or "Error",
                     confidence=confidence or "N/A"
                 )
-                print(f"Successfully saved prediction to database for URL: {url}")
+                print(f"[PREDICT] Successfully saved prediction to database for URL: {url}")
             except Exception as e:
                 error_msg = f"Database save error: {str(e)}"
-                print(error_msg)
+                print(f"[PREDICT] {error_msg}")
+                print(traceback.format_exc())
                 messages.warning(request, 'Prediction completed but could not be saved to history')
 
             return render(request, 'predict.html', {
@@ -551,7 +659,8 @@ def predict(request):
 
         except Exception as e:
             error_msg = f"Critical error in predict: {str(e)}"
-            print(error_msg)
+            print(f"[PREDICT] CRITICAL ERROR: {error_msg}")
+            print(traceback.format_exc())
             messages.error(request, error_msg)
             return render(request, 'predict.html', {'error': error_msg})
 
