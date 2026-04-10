@@ -11,4 +11,5 @@ urlpatterns=[
     path('logout',views.logout,name='logout'),
     path('adminhome',views.adminhome,name='adminhome'),
     path('health',views.health,name='health'),
+    path('status',views.status,name='status'),
 ]

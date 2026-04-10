@@ -1,5 +1,6 @@
 from django.shortcuts import render
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
+from datetime import datetime
 # Create your views here.
 from django.contrib.auth.models import User,auth
 from django.contrib import messages
@@ -10,6 +11,7 @@ import re
 import string
 import hashlib
 from urllib.parse import urlparse
+import os
 
 # ML imports - made optional for local development
 try:
@@ -420,111 +422,353 @@ def adminhome(request):
 
 def predict(request):
     if request.method == 'POST':
-        url = request.POST['url']
-        user = request.user
-
-        if not ML_AVAILABLE:
-            # Mock response for local development
-            prediction_result = "Mock prediction: URL appears safe (ML not available)"
-            prediction_type = "Safe"
-            confidence = "N/A"
-        else:
-            try:
-                # Lazy train model on first prediction if not already trained
-                if not model_trained:
-                    print("Training model on first prediction request...")
-                    train_model()
-
-                # Extract features from the URL
-                url_len = get_url_length(str(url))
-                letters_count = count_letters(url)
-                digits_count = count_digits(url)
-                special_chars_count = count_special_chars(url)
-                shortened = has_shortening_service(url)
-                abnormal = abnormal_url(url)
-                secure = secure_http(url)
-                have_ip = have_ip_address(url)
-                pri_domain = extract_root_domain(url)
-                url_region = hash_encode(get_url_region(str(pri_domain)))
-                root_domain = hash_encode(str(pri_domain))
-
-                # Create feature array
-                features = np.array([[url_len, letters_count, digits_count, special_chars_count,
-                                    shortened, abnormal, secure, have_ip, url_region, root_domain]])
-
-                # Make prediction
-                if pipeline is not None and model_trained:
-                    prediction = pipeline.predict(features)[0]
-                    prediction_proba = pipeline.predict_proba(features)[0]
-
-                    # Map prediction to type
-                    type_mapping = {0: 'Benign', 1: 'Defacement', 2: 'Phishing', 3: 'Malware'}
-                    prediction_type = type_mapping.get(prediction, 'Unknown')
-
-                    # Calculate confidence
-                    confidence = f"{max(prediction_proba) * 100:.2f}%"
-
-                    prediction_result = f"URL classified as: {prediction_type} (Confidence: {confidence})"
-                else:
-                    prediction_result = "Model not trained yet. Please try again later."
-                    prediction_type = "Unknown"
-                    confidence = "N/A"
-
-            except Exception as e:
-                prediction_result = f"Error during prediction: {str(e)}"
-                prediction_type = "Error"
-                confidence = "N/A"
-
-        # Save to database
         try:
-            MaliciousBot.objects.create(
-                user=user,
-                url=url,
-                prediction=prediction_result,
-                prediction_type=prediction_type,
-                confidence=confidence
-            )
-        except Exception as e:
-            print(f"Database save error: {e}")
+            url = request.POST.get('url', '').strip()
+            user = request.user
 
-        return render(request, 'predict.html', {
-            'prediction': prediction_result,
-            'url': url
-        })
+            # Validate URL input
+            if not url:
+                messages.error(request, 'URL cannot be empty')
+                return render(request, 'predict.html')
+
+            if not user.is_authenticated:
+                messages.error(request, 'You must be logged in to make predictions')
+                return HttpResponseRedirect('/login')
+
+            prediction_result = None
+            prediction_type = None
+            confidence = None
+
+            if not ML_AVAILABLE:
+                # Mock response for local development
+                messages.warning(request, 'Running in mock mode - ML dependencies not available')
+                prediction_result = "Mock prediction: URL appears safe (ML not available)"
+                prediction_type = "Safe"
+                confidence = "N/A"
+            else:
+                try:
+                    # Lazy train model on first prediction if not already trained
+                    if not model_trained:
+                        print("Training model on first prediction request...")
+                        messages.info(request, 'Training model on first request... Please wait.')
+                        if not train_model():
+                            messages.error(request, 'Failed to train prediction model')
+                            return render(request, 'predict.html')
+
+                    # Extract features from the URL
+                    try:
+                        url_len = get_url_length(str(url))
+                        letters_count = count_letters(url)
+                        digits_count = count_digits(url)
+                        special_chars_count = count_special_chars(url)
+                        shortened = has_shortening_service(url)
+                        abnormal = abnormal_url(url)
+                        secure = secure_http(url)
+                        have_ip = have_ip_address(url)
+                        pri_domain = extract_root_domain(url)
+                        url_region = hash_encode(get_url_region(str(pri_domain)))
+                        root_domain = hash_encode(str(pri_domain))
+                    except Exception as e:
+                        error_msg = f'Error extracting URL features: {str(e)}'
+                        print(f"Feature extraction error: {error_msg}")
+                        messages.error(request, error_msg)
+                        prediction_result = error_msg
+                        prediction_type = "Error"
+                        confidence = "N/A"
+                        raise
+
+                    # Create feature array
+                    try:
+                        features = np.array([[url_len, letters_count, digits_count, special_chars_count,
+                                            shortened, abnormal, secure, have_ip, url_region, root_domain]])
+                    except Exception as e:
+                        error_msg = f'Error creating feature array: {str(e)}'
+                        print(f"Feature array error: {error_msg}")
+                        messages.error(request, error_msg)
+                        prediction_result = error_msg
+                        prediction_type = "Error"
+                        confidence = "N/A"
+                        raise
+
+                    # Make prediction
+                    if pipeline is not None and model_trained:
+                        try:
+                            prediction = pipeline.predict(features)[0]
+                            prediction_proba = pipeline.predict_proba(features)[0]
+
+                            # Map prediction to type
+                            type_mapping = {0: 'Benign', 1: 'Defacement', 2: 'Phishing', 3: 'Malware'}
+                            prediction_type = type_mapping.get(prediction, 'Unknown')
+
+                            # Calculate confidence
+                            confidence = f"{max(prediction_proba) * 100:.2f}%"
+
+                            prediction_result = f"URL classified as: {prediction_type} (Confidence: {confidence})"
+                            messages.success(request, f'Prediction completed: {prediction_type}')
+                        except Exception as e:
+                            error_msg = f'Error making prediction: {str(e)}'
+                            print(f"Prediction error: {error_msg}")
+                            messages.error(request, error_msg)
+                            prediction_result = error_msg
+                            prediction_type = "Error"
+                            confidence = "N/A"
+                    else:
+                        error_msg = "Model not trained yet. Please try again later."
+                        messages.warning(request, error_msg)
+                        prediction_result = error_msg
+                        prediction_type = "Unknown"
+                        confidence = "N/A"
+
+                except Exception as e:
+                    if prediction_result is None:
+                        error_msg = f"Unexpected error during prediction: {str(e)}"
+                        print(f"Prediction exception: {error_msg}")
+                        messages.error(request, error_msg)
+                        prediction_result = error_msg
+                        prediction_type = "Error"
+                        confidence = "N/A"
+
+            # Save to database
+            try:
+                MaliciousBot.objects.create(
+                    user=user if user.is_authenticated else None,
+                    url=url,
+                    prediction=prediction_result or "Unknown error",
+                    prediction_type=prediction_type or "Error",
+                    confidence=confidence or "N/A"
+                )
+                print(f"Successfully saved prediction to database for URL: {url}")
+            except Exception as e:
+                error_msg = f"Database save error: {str(e)}"
+                print(error_msg)
+                messages.warning(request, 'Prediction completed but could not be saved to history')
+
+            return render(request, 'predict.html', {
+                'prediction': prediction_result,
+                'url': url,
+                'prediction_type': prediction_type
+            })
+
+        except Exception as e:
+            error_msg = f"Critical error in predict: {str(e)}"
+            print(error_msg)
+            messages.error(request, error_msg)
+            return render(request, 'predict.html', {'error': error_msg})
+
     else:
         return render(request, 'predict.html')
 
 def data(request):
     if not request.user.is_authenticated:
+        messages.warning(request, 'Please log in to view your predictions')
         return HttpResponseRedirect('/login')
 
-    if not ML_AVAILABLE:
-        # Mock data for local development
-        mock_data = [
-            {'url': 'https://example.com', 'prediction': 'Mock: Benign', 'prediction_type': 'Benign', 'confidence': 'N/A', 'timestamp': '2024-01-01'},
-            {'url': 'http://suspicious-site.ru', 'prediction': 'Mock: Phishing', 'prediction_type': 'Phishing', 'confidence': 'N/A', 'timestamp': '2024-01-02'},
-        ]
-        return render(request, 'data.html', {'data': mock_data})
-
     try:
-        user_data = MaliciousBot.objects.filter(user=request.user).order_by('-timestamp')
-        data_list = []
-        for item in user_data:
-            data_list.append({
-                'url': item.url,
-                'prediction': item.prediction,
-                'prediction_type': item.prediction_type,
-                'confidence': item.confidence,
-                'timestamp': item.timestamp.strftime('%Y-%m-%d %H:%M:%S') if item.timestamp else 'N/A'
-            })
-        return render(request, 'data.html', {'data': data_list})
+        if not ML_AVAILABLE:
+            # Mock data for local development
+            messages.info(request, 'Displaying mock data - ML not fully available')
+            mock_data = [
+                {'url': 'https://example.com', 'prediction': 'Mock: Benign', 'prediction_type': 'Benign', 'confidence': 'N/A', 'timestamp': '2024-01-01'},
+                {'url': 'http://suspicious-site.ru', 'prediction': 'Mock: Phishing', 'prediction_type': 'Phishing', 'confidence': 'N/A', 'timestamp': '2024-01-02'},
+            ]
+            return render(request, 'data.html', {'data': mock_data})
+
+        try:
+            user_data = MaliciousBot.objects.filter(user=request.user).order_by('-timestamp')
+            data_list = []
+            for item in user_data:
+                try:
+                    data_list.append({
+                        'url': item.url,
+                        'prediction': item.prediction,
+                        'prediction_type': item.prediction_type,
+                        'confidence': item.confidence,
+                        'timestamp': item.timestamp.strftime('%Y-%m-%d %H:%M:%S') if item.timestamp else 'N/A'
+                    })
+                except Exception as e:
+                    print(f"Error processing data item: {str(e)}")
+                    continue
+
+            if not data_list:
+                messages.info(request, 'No prediction history found. Make a prediction to get started!')
+
+            return render(request, 'data.html', {'data': data_list})
+
+        except Exception as e:
+            error_msg = f"Error retrieving prediction history: {str(e)}"
+            print(error_msg)
+            messages.error(request, error_msg)
+            return render(request, 'data.html', {'data': [], 'error': error_msg})
+
     except Exception as e:
-        print(f"Error retrieving data: {e}")
-        return render(request, 'data.html', {'data': [], 'error': 'Unable to load data'})
+        error_msg = f"Critical error in data view: {str(e)}"
+        print(error_msg)
+        messages.error(request, error_msg)
+        return render(request, 'data.html', {'error': error_msg})
 
 def logout(request):
     auth.logout(request)
     return HttpResponseRedirect('/')
+
+def health(request):
+    """Health check endpoint for monitoring"""
+    try:
+        # Check database connectivity
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        
+        db_status = "OK"
+        db_message = "Database connection successful"
+    except Exception as e:
+        db_status = "ERROR"
+        db_message = str(e)
+        print(f"Health check - Database error: {db_message}")
+
+    # Check ML availability
+    ml_status = "OK" if ML_AVAILABLE else "UNAVAILABLE"
+    model_status = "TRAINED" if model_trained else "NOT_TRAINED"
+
+    # Check model training capability
+    try:
+        if not model_trained and ML_AVAILABLE:
+            model_check = "Can train on first request"
+        elif model_trained:
+            model_check = "Model ready for predictions"
+        else:
+            model_check = "ML dependencies not available"
+    except Exception as e:
+        model_check = f"Model check error: {str(e)}"
+
+    response_data = {
+        "status": "healthy" if db_status == "OK" else "degraded",
+        "timestamp": str(datetime.now()),
+        "database": {
+            "status": db_status,
+            "message": db_message
+        },
+        "ml": {
+            "available": ML_AVAILABLE,
+            "status": ml_status,
+            "model_trained": model_trained,
+            "model_status": model_status,
+            "model_check": model_check
+        },
+        "endpoints": {
+            "predict": "/predict",
+            "data": "/data",
+            "register": "/register",
+            "login": "/login",
+            "health": "/health",
+            "status": "/status"
+        }
+    }
+
+    print(f"Health check performed: {response_data}")
+    return JsonResponse(response_data)
+
+def status(request):
+    """Comprehensive status endpoint with detailed diagnostics"""
+    try:
+        # Database status
+        db_status = "OK"
+        db_user_count = 0
+        db_prediction_count = 0
+        db_message = ""
+
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            db_user_count = User.objects.count()
+            db_prediction_count = MaliciousBot.objects.count()
+            db_message = "Database operational"
+        except Exception as e:
+            db_status = "ERROR"
+            db_message = str(e)
+            print(f"Status endpoint - Database error: {db_message}")
+
+        # System information
+        import psutil
+        import platform
+        try:
+            memory_info = psutil.virtual_memory()
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory_percent = memory_info.percent
+            memory_available_mb = memory_info.available / (1024 * 1024)
+        except Exception as e:
+            print(f"System metrics error: {str(e)}")
+            cpu_percent = "N/A"
+            memory_percent = "N/A"
+            memory_available_mb = "N/A"
+
+        # Model status
+        try:
+            # Estimate model size
+            import sys
+            model_size_bytes = sys.getsizeof(pipeline) if pipeline else 0
+            model_size_mb = model_size_bytes / (1024 * 1024)
+        except Exception as e:
+            model_size_mb = "N/A"
+            print(f"Model size check error: {str(e)}")
+
+        # Build comprehensive response
+        response_data = {
+            "status": "operational" if db_status == "OK" else "degraded",
+            "timestamp": str(datetime.now()),
+            "environment": {
+                "platform": platform.system(),
+                "python_version": platform.python_version(),
+                "request_user": str(request.user) if request.user else "anonymous",
+                "is_authenticated": request.user.is_authenticated if request.user else False
+            },
+            "database": {
+                "status": db_status,
+                "message": db_message,
+                "users": db_user_count,
+                "predictions": db_prediction_count
+            },
+            "system_resources": {
+                "cpu_usage_percent": cpu_percent,
+                "memory_usage_percent": memory_percent,
+                "memory_available_mb": memory_available_mb if isinstance(memory_available_mb, str) else f"{memory_available_mb:.2f}"
+            },
+            "ml_system": {
+                "ml_available": ML_AVAILABLE,
+                "model_trained": model_trained,
+                "model_size_mb": model_size_mb if isinstance(model_size_mb, str) else f"{model_size_mb:.2f}",
+                "tldextract_available": TLDEXTRACT_AVAILABLE
+            },
+            "application": {
+                "version": "1.0.0",
+                "name": "MaliciousBot Phishing Detector",
+                "deployment": "Render.com" if os.environ.get('RENDER') else "Local"
+            },
+            "endpoints_available": {
+                "index": "/",
+                "register": "/register",
+                "login": "/login",
+                "adminlogin": "/adminlogin",
+                "predict": "/predict",
+                "data": "/data",
+                "adminhome": "/adminhome",
+                "health": "/health",
+                "status": "/status",
+                "logout": "/logout"
+            }
+        }
+
+        print(f"Status check performed: Application operational, DB: {db_status}, ML: {ML_AVAILABLE}")
+        return JsonResponse(response_data)
+
+    except Exception as e:
+        error_msg = f"Status endpoint error: {str(e)}"
+        print(error_msg)
+        return JsonResponse({
+            "status": "error",
+            "message": error_msg,
+            "timestamp": str(datetime.now())
+        }, status=500)
 
 def health(request):
     """Simple health check endpoint"""
