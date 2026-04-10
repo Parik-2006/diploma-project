@@ -670,6 +670,9 @@ def health(request):
 def status(request):
     """Comprehensive status endpoint with detailed diagnostics"""
     try:
+        import platform
+        import sys
+        
         # Database status
         db_status = "OK"
         db_user_count = 0
@@ -689,13 +692,17 @@ def status(request):
             print(f"Status endpoint - Database error: {db_message}")
 
         # System information
-        import psutil
-        import platform
         try:
+            import psutil
             memory_info = psutil.virtual_memory()
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory_percent = memory_info.percent
             memory_available_mb = memory_info.available / (1024 * 1024)
+        except ImportError:
+            print("psutil not available - system metrics unavailable")
+            cpu_percent = "N/A (psutil not installed)"
+            memory_percent = "N/A (psutil not installed)"
+            memory_available_mb = "N/A (psutil not installed)"
         except Exception as e:
             print(f"System metrics error: {str(e)}")
             cpu_percent = "N/A"
@@ -705,7 +712,6 @@ def status(request):
         # Model status
         try:
             # Estimate model size
-            import sys
             model_size_bytes = sys.getsizeof(pipeline) if pipeline else 0
             model_size_mb = model_size_bytes / (1024 * 1024)
         except Exception as e:
