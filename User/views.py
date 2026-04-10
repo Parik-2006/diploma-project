@@ -318,65 +318,104 @@ def index(request):
 
 def register(request):
     if request.method == 'POST':
-        username = request.POST['username']
-        email = request.POST['email']
-        password = request.POST['password']
-        password2 = request.POST['password2']
+        try:
+            username = request.POST.get('username', '').strip()
+            email = request.POST.get('email', '').strip()
+            password = request.POST.get('password', '')
+            password2 = request.POST.get('password2', '')
 
-        if password == password2:
-            if User.objects.filter(email=email).exists():
-                messages.info(request,'Email already exists')
-                return render(request,'register.html')
-            elif User.objects.filter(username=username).exists():
-                messages.info(request,'Username already exists')
-                return render(request,'register.html')
+            # Validate inputs
+            if not username or not email or not password:
+                messages.error(request, 'All fields are required')
+                return render(request, 'register.html')
+
+            if password == password2:
+                if User.objects.filter(email=email).exists():
+                    messages.info(request, 'Email already exists')
+                    return render(request, 'register.html')
+                elif User.objects.filter(username=username).exists():
+                    messages.info(request, 'Username already exists')
+                    return render(request, 'register.html')
+                else:
+                    try:
+                        user = User.objects.create_user(username=username, email=email, password=password)
+                        user.save()
+                        messages.success(request, 'Registration successful! Please login.')
+                        return HttpResponseRedirect('/login')
+                    except Exception as e:
+                        print(f"Error creating user: {str(e)}")
+                        messages.error(request, f'Error creating user: {str(e)}')
+                        return render(request, 'register.html')
             else:
-                user = User.objects.create_user(username=username,email=email,password=password)
-                user.save()
-                return HttpResponseRedirect('/login')
-        else:
-            messages.info(request,'Password not matching')
-            return render(request,'register.html')
+                messages.info(request, 'Password not matching')
+                return render(request, 'register.html')
+        except Exception as e:
+            print(f"Register error: {str(e)}")
+            messages.error(request, 'An error occurred during registration')
+            return render(request, 'register.html')
     else:
-        return render(request,'register.html')
+        return render(request, 'register.html')
 
 def login(request):
     if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
+        try:
+            username = request.POST.get('username', '').strip()
+            password = request.POST.get('password', '')
 
-        user = auth.authenticate(username=username,password=password)
+            if not username or not password:
+                messages.error(request, 'Username and password are required')
+                return render(request, 'login.html')
 
-        if user is not None:
-            auth.login(request,user)
-            return HttpResponseRedirect('/predict')
-        else:
-            messages.info(request,'Invalid credentials')
-            return render(request,'login.html')
+            user = auth.authenticate(username=username, password=password)
+
+            if user is not None:
+                auth.login(request, user)
+                return HttpResponseRedirect('/predict')
+            else:
+                messages.info(request, 'Invalid credentials')
+                return render(request, 'login.html')
+        except Exception as e:
+            print(f"Login error: {str(e)}")
+            messages.error(request, 'An error occurred during login')
+            return render(request, 'login.html')
     else:
-        return render(request,'login.html')
+        return render(request, 'login.html')
 
 def adminlogin(request):
     if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
+        try:
+            username = request.POST.get('username', '').strip()
+            password = request.POST.get('password', '')
 
-        user = auth.authenticate(username=username,password=password)
+            if not username or not password:
+                messages.error(request, 'Username and password are required')
+                return render(request, 'adminlogin.html')
 
-        if user is not None and user.is_superuser:
-            auth.login(request,user)
-            return HttpResponseRedirect('/adminhome')
-        else:
-            messages.info(request,'Invalid credentials or not an admin')
-            return render(request,'adminlogin.html')
+            user = auth.authenticate(username=username, password=password)
+
+            if user is not None and user.is_superuser:
+                auth.login(request, user)
+                return HttpResponseRedirect('/adminhome')
+            else:
+                messages.info(request, 'Invalid credentials or not an admin')
+                return render(request, 'adminlogin.html')
+        except Exception as e:
+            print(f"Admin login error: {str(e)}")
+            messages.error(request, 'An error occurred during admin login')
+            return render(request, 'adminlogin.html')
     else:
-        return render(request,'adminlogin.html')
+        return render(request, 'adminlogin.html')
 
 def adminhome(request):
-    if request.user.is_superuser:
-        data = MaliciousBot.objects.all()
-        return render(request,'adminhome.html',{'data':data})
-    else:
+    try:
+        if request.user.is_superuser:
+            data = MaliciousBot.objects.all()
+            return render(request, 'adminhome.html', {'data': data})
+        else:
+            return HttpResponseRedirect('/adminlogin')
+    except Exception as e:
+        print(f"Adminhome error: {str(e)}")
+        messages.error(request, 'An error occurred accessing admin home')
         return HttpResponseRedirect('/adminlogin')
 
 def predict(request):
