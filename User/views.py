@@ -525,3 +525,26 @@ def data(request):
 def logout(request):
     auth.logout(request)
     return HttpResponseRedirect('/')
+
+def health(request):
+    """Simple health check endpoint"""
+    from django.http import JsonResponse
+    from django.db import connection
+    
+    try:
+        # Test database connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        result = cursor.fetchone()
+        
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'Database connection is working',
+            'database': connection.settings_dict.get('ENGINE', 'unknown')
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Database error: {str(e)}',
+            'database': connection.settings_dict.get('ENGINE', 'unknown')
+        }, status=500)
