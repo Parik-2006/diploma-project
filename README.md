@@ -1,99 +1,125 @@
-# ⚡ MaliciousBot: Phishing URL Detection Engine
+# 🛡️ MaliciousBot — Malicious URL Detection System
 
-> **A Next-Generation Phishing & Malicious URL Detection System.**
-> *Designed for Web Security, Cyber Threat Analysis, and Real-Time Protection.*
-
----
-
-## 📖 Project Objective
-
-Modern web environments face constant threats from phishing and malicious URLs:
-* **Manual Blacklists:** Quickly become outdated and miss new threats.
-* **Signature-Based Detection:** Fails against zero-day and obfuscated attacks.
-
-**The Solution:**
-The **MaliciousBot** engine leverages machine learning to analyze and classify URLs in real-time. It combines feature extraction, statistical analysis, and predictive modeling to provide robust protection against evolving threats.
+> A Django-based Machine Learning system that analyzes URLs and classifies them as **Benign, Defacement, Phishing, or Malware**.
 
 ---
 
-## ⚙️ Detection Algorithm
+## 🎯 Project Objective
 
-The engine evaluates each URL using a composite score ($S$) based on multiple features:
-
-$$S = (W_{lex} \times F_{lexical}) + (W_{host} \times F_{host}) + (W_{meta} \times F_{meta})$$
-
-* **$W_{lex}$ (Lexical Weight):** Analyzes suspicious patterns in the URL string.
-* **$W_{host}$ (Host Weight):** Checks domain reputation, age, and IP anomalies.
-* **$W_{meta}$ (Metadata Weight):** Considers WHOIS, SSL, and other metadata.
+MaliciousBot automatically analyzes the structure of a URL instead of relying only on manually maintained blacklists.
+It extracts URL-based features and uses a trained **Random Forest** model to predict the URL category and confidence.
 
 ---
 
-## 🌍 Real-World Scenarios
+## 🤖 How It Works
 
-This project demonstrates MaliciousBot's effectiveness in four key domains:
+User enters URL
+      ↓
+Django Backend
+      ↓
+Feature Extraction
+      ↓
+Random Forest Model
+      ↓
+Prediction + Confidence
+      ↓
+Database
+      ↓
+Prediction History
 
-| Domain | The Problem | The MaliciousBot Solution |
-| :--- | :--- | :--- |
-| **🏦 Online Banking** | Phishing links steal credentials. | **Real-Time Detection:** Blocks suspicious URLs before login. |
-| **🎓 E-Learning** | Students targeted by fake portals. | **Automated Screening:** Flags malicious links in course content. |
-| **🛒 E-Commerce** | Fake stores trick shoppers. | **Domain Analysis:** Identifies and blocks scam sites. |
-| **💼 Enterprise Email** | Employees receive phishing emails. | **Bulk Scanning:** Scans and filters URLs in incoming mail. |
 
----
+### URL Features
 
-## 🛠️ Tech Stack
-
-* **Backend:** Python (Django)
-* **Algorithm:** Machine Learning (Scikit-learn, Pandas)
-* **Frontend:** HTML5, CSS3, JavaScript (Bootstrap)
-* **Visualization:** Matplotlib, Chart.js (for analytics)
-
----
-
-## 🚀 How to Run Locally
-
-1. **Clone the Repository**
-    ```bash
-    git clone https://github.com/YOUR-USERNAME/maliciousbot.git
-    cd maliciousbot
-    ```
-
-2. **Install Dependencies**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3. **Run the Server**
-    ```bash
-    python manage.py runserver
-    ```
-
-4. **Open in Browser**
-    Visit `http://127.0.0.1:8000`
+- URL length
+- Letters and digits
+- Special characters
+- URL shortener presence
+- Abnormal URL check
+- HTTPS usage
+- IP address presence
+- Region
+- Root domain
 
 ---
 
-## ☁️ Deployment
+## 🧠 Machine Learning
 
-This project is deployed on **Render**.
-1. Push code to GitHub.
-2. Connect your repository to Render.
-3. Render automatically deploys your Django app using `render.yaml`.
+The project uses a **Random Forest Classifier** trained using static labeled CSV datasets.
 
-**Live Demo:** [MaliciousBot on Render](https://diploma-project-rwht.onrender.com)
+
+Dataset
+  ↓
+Feature Extraction
+  ↓
+80% Training ──→ Random Forest learns patterns
+  ↓
+20% Testing ───→ Model evaluation
+
+
+The model classifies URLs into:
+
+| Class | Meaning |
+|-------|---------|
+| 🟢 Benign | Legitimate and safe URL |
+| 🔴 Defacement | Associated with unauthorized website modification |
+| 🟠 Phishing | Attempts to deceive users into revealing sensitive information |
+| 🔴 Malware | Associated with malicious software or harmful content |
 
 ---
 
-### 📄 License
+## ⚙️ Tech Stack
 
-This project is for educational research purposes.
+### Backend
+- Python
+- Django
 
-## 🤝 Contributing & Issues
+### Machine Learning
+- Scikit-learn
+- Pandas
+- NumPy
+- Random Forest
 
-This project is open for viewing. **Direct changes are restricted.**
+### Frontend
+- HTML5
+- CSS3
+- Bootstrap
+- JavaScript
+- jQuery
+- Django Template Language
 
-* **Found a bug?** Please [Open a New Issue](https://github.com/YOUR-USERNAME/maliciousbot/issues/new) and describe the problem.
-* **Want to fix it?** Please Fork the repo and submit a Pull Request (PR) for review.
+### Database & Deployment
+- SQLite / Django ORM
+- WhiteNoise
+- WSGI / ASGI
+
+---
+
+## 🗄️ Database & Application
+
+Django's `MaliciousBot` model stores:
+
+- User
+- URL
+- Prediction
+- Prediction Type
+- Confidence
+- Timestamp
+
+The application also provides authentication, prediction history, and an admin dashboard for viewing stored records.
+
+---
+
+## 🚀 Run Locally
+
+bash
+git clone <YOUR-REPOSITORY-URL>
+cd <PROJECT-DIRECTORY>
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+
+
+Open: [https://github.com/Parik-2006/diploma-project](https://github.com/Parik-2006/diploma-project)
 
 ---
 
@@ -104,3 +130,7 @@ This project is open for viewing. **Direct changes are restricted.**
 - Ajay Kumar P
 
 ---
+
+## 📄 License
+
+This project is intended for educational and academic purposes.
